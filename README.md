@@ -1,6 +1,6 @@
 # Custom Pop!_OS Build Environment
 
-This repository contains a Makefile and configuration files to build a customized Pop!_OS ISO image. This specific configuration focuses on pre-installing tools useful for GPU computing and monitoring.
+This repository contains a Makefile and configuration files to build a customized Pop!_OS ISO image. This specific configuration focuses on pre-installing tools useful for GPU computing and monitoring, and incorporates a machine learning component to dynamically optimize power management profiles.
 
 ## Overview
 
@@ -8,33 +8,47 @@ The primary goal of this build configuration is to create a Pop!_OS (`22.04` by 
 
 1.  **NVIDIA CUDA Toolkit:** Essential for GPU-accelerated computing tasks, particularly in machine learning and scientific computing.
 2.  **Custom Python GPU Monitor:** A simple graphical tool to monitor GPU usage, built using Python, Tkinter, pynvml, and Matplotlib.
+3.  **ML-Optimized Power Management:** An experimental feature integrated into the system's power management daemon to adaptively select power profiles based on system load and learned behavior.
 
-These additions are integrated during the ISO build process defined in the `Makefile`.
+These additions are integrated during the ISO build process or are intended modifications to the underlying system packages included in the build.
 
-## Key Modifications (Reflected in `Makefile`)
+## Key Modifications & Features
+
+### 1. Pre-installed GPU Tools (via `Makefile`)
 
 The standard ISO build process (`iso` target in the `Makefile`) has been modified to include the following steps:
 
-1.  **Install CUDA:**
+* **Install CUDA:**
     * Updates the package list (`sudo apt-get update`).
-    * Installs the `cuda` package using APT (`sudo apt-get install -y cuda`). This provides the necessary NVIDIA drivers, CUDA toolkit, and libraries required to run CUDA-enabled applications.
-    * *Note:* While CUDA is installed, specific frameworks like PyTorch or TensorFlow **are not** installed by this script. However, the pre-installed CUDA toolkit enables users to easily install GPU-accelerated versions of these frameworks post-installation (e.g., via `pip`).
+    * Installs the `cuda` package using APT (`sudo apt-get install -y cuda`). This provides the necessary NVIDIA drivers, CUDA toolkit, and libraries.
+    * *Note:* Specific ML frameworks like PyTorch/TensorFlow are **not** installed by this script, but the pre-installed CUDA enables users to easily install GPU-accelerated versions post-installation.
 
-2.  **Install GPU Monitor Dependencies:**
-    * Installs necessary system packages: `python3-tk` (for the GUI) and `python3-pip` (for Python package management) using APT.
-    * Installs required Python libraries: `pynvml` (for NVIDIA GPU information) and `matplotlib` (for plotting, if used by `gpu.py`) using `pip`.
+* **Install GPU Monitor Dependencies:**
+    * Installs `python3-tk` and `python3-pip` via APT.
+    * Installs `pynvml` and `matplotlib` via `pip`.
 
-3.  **Copy GPU Monitor Files:**
-    * Creates a directory `/opt/gpu-monitor` within the ISO build environment.
-    * Copies the custom GPU monitor script (`gpu.py`) and its icon (`gpu.png`) to `/opt/gpu-monitor`.
-    * **Important:** You **must** replace the placeholder paths (`path/to/gpu.py` and `path/to/gpu.png`) in the `Makefile` with the actual paths to your script and icon relative to the build environment or use absolute paths accessible during the build.
+* **Copy GPU Monitor Files:**
+    * Copies `gpu.py` and `gpu.png` to `/opt/gpu-monitor` in the ISO.
+    * **Important:** You **must** replace the placeholder paths (`path/to/gpu.py`, `path/to/gpu.png`) in the `Makefile` with the actual paths.
 
-4.  **Create Desktop Shortcut:**
-    * Creates a `.desktop` file (`gpu-monitor.desktop`) in `/usr/share/applications` within the ISO build environment.
-    * This makes the "GPU Monitor" application easily launchable from the system's application menu after installation.
+* **Create Desktop Shortcut:**
+    * Creates `gpu-monitor.desktop` in `/usr/share/applications` for easy launching from the application menu.
 
-5.  **Set Executable Permissions:**
-    * Makes the `gpu.py` script executable (`sudo chmod +x`).
+* **Set Executable Permissions:**
+    * Makes `gpu.py` executable.
+
+### 2. ML-Optimized Power Management (via Code Modifications)
+
+This build aims to include modifications to the system's power management daemon (likely `system76-power` or similar, based on the code structure provided) to introduce adaptive power profile selection using machine learning.
+
+* **Goal:** To dynamically adjust system power profiles (`Performance`, `Balanced`, `Battery`) based on current system load and learned usage patterns, potentially improving responsiveness when needed and conserving battery life otherwise.
+* **Technique:** Implements a simple Reinforcement Learning agent (Q-learning).
+* **How it Works:**
+    * **State:** Monitors the system's CPU load average (`/proc/loadavg`) to determine the current state (e.g., low, medium, high load).
+    * **Actions:** Selects one of the available power profiles (`performance`, `balanced`, `battery`).
+    * **Learning:** Calculates a reward based on current CPU load and whether the system is running on battery power. It learns over time which profile selection leads to better outcomes (e.g., lower load on battery, responsiveness when plugged in) for different states.
+    * **Persistence:** The learned model (Q-values) is periodically saved to `/var/lib/system76-power/ml_model.dat` and reloaded when the service starts.
+* **Integration:** The power profile setting mechanism consults this learning agent to intelligently suggest or select a profile. The system aims to primarily use the ML-derived profile but may occasionally use a user-specified profile based on internal logic (e.g., the 70/30 split seen in the example `set_profile` function).
 
 ## Prerequisites for Building
 
@@ -42,33 +56,34 @@ Before running `make`, ensure you have:
 
 * A Linux environment (preferably Debian/Ubuntu-based).
 * Standard build tools (`make`, etc.).
-* Dependencies required by the Pop!_OS build system (refer to Pop!_OS documentation if needed).
+* Dependencies required by the Pop!_OS build system.
 * The `gpu.py` script and `gpu.png` icon file available at the locations you specify in the `Makefile`.
-* Sufficient disk space for the build process and the final ISO.
-* `sudo` privileges are required for many build steps.
+* If implementing the ML power management, the modified Rust code needs to be compiled and integrated into the relevant system package that will be included in the ISO build (this step is *not* covered by the provided `Makefile` snippet).
+* Sufficient disk space and `sudo` privileges.
 
 ## How to Build
 
-1.  **Configure:** Review the configuration variables at the top of the `Makefile` (`DISTRO_CODE`, `DISTRO_VERSION`, etc.) and adjust if necessary.
-2.  **Update Paths:** **Crucially**, edit the `iso:` target in the `Makefile` and replace `path/to/gpu.py` and `path/to/gpu.png` with the correct paths to your files.
-3.  **Build the ISO:** Open a terminal in the directory containing the `Makefile` and run:
+1.  **Configure:** Review variables in the `Makefile`.
+2.  **Update Paths:** Edit the `iso:` target in `Makefile` and replace `path/to/gpu.py` and `path/to/gpu.png`.
+3.  **Build the ISO:**
     ```bash
     make iso
     ```
-4.  **Build All Components (Optional):** To build the ISO, zsync file, and checksums:
+4.  **Build All (Optional):**
     ```bash
     make all
     ```
 
-The resulting ISO file will be located in the `build/` directory (or as configured by the included makefiles).
+The resulting ISO file will be located in the `build/` directory.
 
 ## Post-Installation Notes
 
-After installing Pop!_OS using the ISO generated by this `Makefile`:
+After installing Pop!_OS using the ISO generated by this configuration:
 
-* The NVIDIA CUDA Toolkit will be pre-installed. You can verify this by checking for `nvcc` or NVIDIA driver tools.
-* The "GPU Monitor" application should be available in your application menu (usually found under Utilities or System Tools). You can launch it to monitor your GPU.
-* You will still need to install GPU-accelerated versions of frameworks like PyTorch or TensorFlow separately if required, but they will be able to utilize the pre-installed CUDA toolkit.
+* The NVIDIA CUDA Toolkit will be pre-installed.
+* The "GPU Monitor" application should be available in your application menu.
+* The power management system should incorporate the ML-based adaptive profile selection (assuming the modified daemon was correctly built and included in the ISO). The system will learn and adjust profile usage over time.
+* You may still need to install GPU-accelerated ML frameworks (PyTorch, TensorFlow) manually via `pip` or other package managers.
 
 
 
