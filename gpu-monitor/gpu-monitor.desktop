@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=GPU MONITOR
+Conmment=Simple tool to monitor gpu
+Exec=python3 /home/jainos/GPU-Monitor/gpu_graph.py
+Icon= /home/jainos/GPU-Monitor/gpu_image.png
+Terminal=false
+Type=Application
+Categories=Utiliy
+
